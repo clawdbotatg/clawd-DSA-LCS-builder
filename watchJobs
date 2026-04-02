@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""
+Poll LeftClaw Services for Build jobs and dispatch the agent.
+No LLM involved — pure deterministic loop.
+"""
+
+from agent.jobs import JobWatcher
+
+SERVICE_TYPE = 6
+
+
+def build_prompt(job, attempt, resume):
+    job_id = job["id"]
+    client = job.get("client", "unknown")
+    stage = job.get("currentStage", "")
+
+    if resume:
+        return (
+            f"RESUME: Job #{job_id} on LeftClaw is already assigned to you and IN PROGRESS "
+            f"(current stage: '{stage}'). Previous run may have crashed or timed out. "
+            f"Do NOT call leftclaw_accept_job — the job is already accepted. "
+            f"First fetch your skill docs with deep_fetch: "
+            f"https://ethskills.com/SKILL.md, "
+            f"https://docs.scaffoldeth.io/SKILL.md, "
+            f"https://www.bgipfs.com/SKILL.md, "
+            f"https://leftclaw.services/admin/skill.md. "
+            f"Then use leftclaw_get_job to read the full description, leftclaw_get_messages to check for "
+            f"client messages and rollback requests. "
+            f"Determine which stage comes AFTER '{stage}' in the pipeline, and continue from there. "
+            f"Work through remaining stages, log work after each, and complete the job when ready."
+        )
+
+    if attempt == 1:
+        return (
+            f"You have a Build job to complete. "
+            f"Job #{job_id} on LeftClaw Services. Client: {client}. "
+            f"First fetch your skill docs with deep_fetch: "
+            f"https://ethskills.com/SKILL.md, "
+            f"https://docs.scaffoldeth.io/SKILL.md, "
+            f"https://www.bgipfs.com/SKILL.md, "
+            f"https://leftclaw.services/admin/skill.md. "
+            f"Then use leftclaw_get_job to read the full description, leftclaw_get_messages to check for client messages. "
+            f"Note the job.client address — this is who owns everything you build. "
+            f"Work through the full Build pipeline: create_repo → create_plan → create_user_journey → "
+            f"prototype → contract_audit → contract_fix → frontend_audit → frontend_fix → "
+            f"full_audit → full_audit_fix → deploy_contract → deploy_app → liveuserjourney → readme → ready. "
+            f"Log work after each stage. Follow ethskills.com exactly. "
+            f"Deploy contracts to Base, deploy frontend to BGIPFS. "
+            f"Complete the job with leftclaw_complete_job using the BGIPFS gateway URL."
+        )
+
+    return (
+        f"RETRY: Job #{job_id} on LeftClaw was accepted but not completed on a previous attempt "
+        f"(current stage: '{stage}'). "
+        f"The job is already accepted — do NOT call leftclaw_accept_job again. "
+        f"Fetch your skill docs: https://ethskills.com/SKILL.md, "
+        f"https://docs.scaffoldeth.io/SKILL.md, https://www.bgipfs.com/SKILL.md, "
+        f"https://leftclaw.services/admin/skill.md. "
+        f"Use leftclaw_get_job to read the description, check messages for rollbacks. "
+        f"Continue the pipeline from the stage after '{stage}'. "
+        f"Log work after each stage, complete the job when all stages are done."
+    )
+
+
+if __name__ == "__main__":
+    JobWatcher(
+        service_type_id=SERVICE_TYPE,
+        prompt_builder=build_prompt,
+        poll_interval=60,
+        agent_timeout=1800,
+        max_retries=3,
+    ).run()
