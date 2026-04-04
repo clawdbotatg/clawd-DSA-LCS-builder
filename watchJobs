@@ -2,20 +2,37 @@
 """
 Poll LeftClaw Services for Build jobs and dispatch the agent.
 No LLM involved — pure deterministic loop.
+
+Model routing: uses minimax-m2.7 for cheap stages (planning, auditing,
+deploying) and claude-opus-4.6 only for code-writing stages.
 """
 
 from agent.jobs import JobWatcher
 
 SERVICE_TYPE = 6
 
+OPUS = "claude-opus-4.6"
+CHEAP = "minimax-m2.7"
+
+OPUS_STAGES = {"", "prototype", "contract_fix", "frontend_fix", "full_audit_fix"}
+
+
+def _model_for_stage(stage):
+    """Pick the model based on job stage. Opus for code writing, cheap for everything else."""
+    if stage in OPUS_STAGES:
+        return OPUS
+    return CHEAP
+
 
 def build_prompt(job, attempt, resume):
+    """Returns (prompt, model) tuple. Model selected based on current stage."""
     job_id = job["id"]
     client = job.get("client", "unknown")
     stage = job.get("currentStage", "")
+    model = _model_for_stage(stage)
 
     if resume:
-        return (
+        prompt = (
             f"RESUME: Job #{job_id} on LeftClaw is already assigned to you and IN PROGRESS "
             f"(current stage: '{stage}'). Previous run may have crashed or timed out. "
             f"Do NOT call leftclaw_accept_job — the job is already accepted. "
@@ -29,9 +46,10 @@ def build_prompt(job, attempt, resume):
             f"Determine which stage comes AFTER '{stage}' in the pipeline, and continue from there. "
             f"Work through remaining stages, log work after each, and complete the job when ready."
         )
+        return prompt, model
 
     if attempt == 1:
-        return (
+        prompt = (
             f"You have a Build job to complete. "
             f"Job #{job_id} on LeftClaw Services. Client: {client}. "
             f"First fetch your skill docs with deep_fetch: "
@@ -48,8 +66,9 @@ def build_prompt(job, attempt, resume):
             f"Deploy contracts to Base, deploy frontend to BGIPFS. "
             f"Complete the job with leftclaw_complete_job using the BGIPFS gateway URL."
         )
+        return prompt, model
 
-    return (
+    prompt = (
         f"RETRY: Job #{job_id} on LeftClaw was accepted but not completed on a previous attempt "
         f"(current stage: '{stage}'). "
         f"The job is already accepted — do NOT call leftclaw_accept_job again. "
@@ -60,6 +79,7 @@ def build_prompt(job, attempt, resume):
         f"Continue the pipeline from the stage after '{stage}'. "
         f"Log work after each stage, complete the job when all stages are done."
     )
+    return prompt, model
 
 
 if __name__ == "__main__":
