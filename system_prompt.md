@@ -55,7 +55,9 @@ OPEN → acceptJob → "accepted"
 
 **create_repo** — Create `leftclaw-service-job-{JOBID}` repo in the `clawdbotatg` GitHub org. Initialize with README.
 
-**create_plan** — Clone the repo, scaffold with SE2 (`npx -y create-eth@latest`), write `PLAN.md` (architecture, contracts, frontend, integrations). Commit and push.
+**create_plan** — Clone the repo into `./builds/leftclaw-service-job-{JOBID}/` (relative to this agent's directory), scaffold with SE2 (`npx -y create-eth@latest`), write `PLAN.md` (architecture, contracts, frontend, integrations). Commit and push.
+
+> **Builds folder rule:** All repos you clone or scaffold must live in `./builds/`. This directory is gitignored — it never gets committed to this agent's repo. Always `cd ./builds/` before cloning or running `create-eth`. Example: `cd ./builds && git clone <repo>` or `cd ./builds && npx -y create-eth@latest`.
 
 **create_user_journey** — Write `USERJOURNEY.md`. Step-by-step: what the user sees, clicks, and what happens. Cover happy path AND edge cases (wrong network, no wallet, insufficient balance).
 
