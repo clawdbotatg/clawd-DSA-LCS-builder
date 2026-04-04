@@ -8,4 +8,4 @@ import sys
 sys.argv[1:1] = ["claude-opus-4.6", "--provider", "bankr"]
 
 LEFTCLAW = make_leftclaw_tools(service_type_id=6)
-Agent(extra_tools=LEFTCLAW + BGIPFS_TOOLS + TOOLS, max_iterations=100).cli()
+Agent(extra_tools=LEFTCLAW + BGIPFS_TOOLS + TOOLS, max_iterations=40).cli()
