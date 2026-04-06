@@ -21,35 +21,64 @@ if "--job" in sys.argv:
         f"\n\nSTART FRESH — create ./builds/leftclaw-service-job-{job_id}_$(date +%s) "
         f"as your build folder. Do NOT look at or reuse any existing folders. "
         f"Create the folder and GitHub repo in your FIRST action."
-        f"\n\nFollow this pipeline:"
+
+        f"\n\n=== PIPELINE ==="
         f"\n1. create_repo — Delegate: set up folder + GitHub repo."
         f"\n1b. env_check — Delegate: verify ETH_PRIVATE_KEY is available (check .env file). "
         f"If missing, use leftclaw skill docs to find how to get it. "
         f"Do NOT proceed past step 2 without a working private key."
         f"\n2. scaffold — Delegate: run create-eth to scaffold SE2 with Foundry."
-        f"\n3. plan — Delegate: write MASTER_PLAN.md with contract architecture, "
-        f"frontend design, and deployment steps. This is the ONLY planning artifact. "
-        f"Do NOT create step scripts in steps/ — they waste tokens and never get executed."
-        f"\n4. build — Delegate focused sub-agent tasks: one for contracts+deploy script+tests, "
-        f"one for frontend. Each sub-agent gets just the relevant section of MASTER_PLAN.md "
-        f"as context via the files parameter. Do NOT paste large file contents into the task string."
-        f"\n5. verify — Delegate: run forge build + forge test. If either fails, delegate a fix sub-agent. "
-        f"Do NOT proceed to deployment until both pass."
-        f"\n6. deploy — Delegate: deploy contract to Base, verify on Basescan, "
-        f"deploy frontend to BGIPFS."
+        f"\n3. plan — Delegate: write MASTER_PLAN.md (architecture, contracts, frontend, deploy). "
+        f"This is the ONLY planning artifact. No step scripts."
+        f"\n4. build — Delegate: one sub-agent for contracts+deploy script+tests, "
+        f"one for frontend page.tsx."
+        f"\n5. verify — Delegate: run forge build + forge test. Fix failures before proceeding."
+        f"\n6. deploy — Delegate: deploy contract to Base, verify, deploy frontend to BGIPFS."
         f"\n7. complete — Call leftclaw_complete_job with the BGIPFS gateway URL."
-        f"\n\nIMPORTANT:"
-        f"\n- You are an ORCHESTRATOR. Use delegate() for ALL work. Do NOT call shell, "
-        f"read_file, write_file, or any I/O tools directly — they are blocked for you."
-        f"\n- Keep sub-agent tasks focused. Each delegate call does ONE thing."
-        f"\n- Give file PATHS in delegate tasks, not file contents."
-        f"\n- Tell sub-agents which files to read and which to SKIP (e.g. skip AGENTS.md, large docs)."
-        f"\n- Git add + commit after each successful step (checkpoints prevent lost work)."
-        f"\n- Log work on-chain after each stage."
-        f"\n- Sub-agent iteration budgets: scaffold/setup tasks: 10 iters. "
-        f"Contract writing: 15 iters. Frontend writing: 20 iters. "
-        f"Bug fixes: 10 iters. Deployment: 10 iters. "
-        f"Never set max_iterations below 10."
+
+        f"\n\n=== MODEL ROUTING ==="
+        f"\nChoose the model for each delegate() call:"
+        f"\n  minimax-m2.7 (default): setup, git, running commands, checking files, config patches, diagnostics"
+        f"\n  claude-sonnet-4.6: writing MASTER_PLAN.md, fixing compile/test errors, deployment tasks"
+        f"\n  claude-opus-4.6: writing smart contracts, writing tests, writing frontend page.tsx"
+        f"\n  Rule: any task that produces important code MUST use opus."
+        f"\n  When using sonnet/opus: ALWAYS set skip_default_skills=true and only pass the needed skill(s)."
+        f"\n  Keep task descriptions SHORT for expensive models. Give file paths, not content."
+
+        f"\n\n=== SKILL ROUTING ==="
+        f"\nSet skills and skip_default_skills=true on EVERY delegate call:"
+        f"\n  Writing Solidity / forge / contract bugs → skills: [\"ethskills\"]"
+        f"\n  Scaffolding with create-eth             → skills: [\"scaffoldeth\"]"
+        f"\n  Building frontend / SE2 hooks            → skills: [\"scaffoldeth\"]"
+        f"\n  Writing MASTER_PLAN.md                   → skills: [\"ethskills\", \"scaffoldeth\"]"
+        f"\n  Deploying to IPFS                        → skills: [\"bgipfs\"]"
+        f"\n  Deploying contracts to chain              → skills: [\"ethskills\"]"
+        f"\n  Shell commands, file checks, git          → skills: [] (no skills needed)"
+        f"\n  leftclaw is orchestrator-only — never pass it to sub-agents."
+
+        f"\n\n=== FILE PRELOADING ==="
+        f"\nUse the files parameter to preload what sub-agents need (saves iterations):"
+        f"\n  Contract writing → files: [MASTER_PLAN.md, foundry.toml]"
+        f"\n  Frontend writing → files: [MASTER_PLAN.md, scaffold.config.ts, existing page.tsx]"
+        f"\n  Test fixing      → files: [failing test file, contract file]"
+        f"\n  Deploy           → files: [.env, foundry.toml, MASTER_PLAN.md]"
+
+        f"\n\n=== RETRY RULES ==="
+        f"\nIf a delegate fails or hits max_iterations:"
+        f"\n- Do NOT re-delegate the same task with different wording."
+        f"\n- After 1 failure: break the task into smaller, more specific sub-tasks."
+        f"\n- After 2 failures on the same goal: delegate a diagnostic task first "
+        f"(\"list the directory\", \"read the error\") to understand WHY before trying again."
+        f"\n- Never delegate the same task more than 3 times total."
+
+        f"\n\n=== RULES ==="
+        f"\n- You are an ORCHESTRATOR. Use delegate() for ALL work. "
+        f"Shell, read_file, write_file are BLOCKED for you."
+        f"\n- Log work on-chain only at major stages: create_repo, scaffold, build, verify, deploy, complete. "
+        f"Do NOT log after every sub-step."
+        f"\n- Git add + commit after each successful step."
+        f"\n- Sub-agent iteration budgets: setup: 10. Contracts: 15. Frontend: 20. "
+        f"Fixes: 10. Deploy: 10. Never below 10."
     )
 
 model = os.environ.get("AGENT_MODEL", "minimax-m2.7")
@@ -69,7 +98,7 @@ if job_prompt:
 
 Agent(
     extra_tools=LEFTCLAW + BGIPFS_TOOLS + TOOLS,
-    max_cost=5.00,
+    max_cost=10.00,
     preload_skills=SKILLS,
     default_skills=["leftclaw", "ethskills", "scaffoldeth"],
     exclude_tools=[
