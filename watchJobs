@@ -14,7 +14,18 @@ SERVICE_TYPE = 6
 OPUS = "claude-opus-4.6"
 CHEAP = "minimax-m2.7"
 
-OPUS_STAGES = {"", "prototype", "contract_fix", "frontend_fix", "full_audit_fix"}
+OPUS_STAGES = {
+    "master_plan", "break_into_steps",
+    "prototype", "contract_fix", "frontend_fix", "full_audit_fix",
+    "deploy_contract", "livecontract_fix", "deep_contract_fix",
+}
+
+SKILL_URLS = [
+    "https://leftclaw.services/admin/skill.md",
+    "https://ethskills.com/SKILL.md",
+    "https://docs.scaffoldeth.io/SKILL.md",
+    "https://www.bgipfs.com/SKILL.md",
+]
 
 
 def _model_for_stage(stage):
@@ -25,59 +36,39 @@ def _model_for_stage(stage):
 
 
 def build_prompt(job, attempt, resume):
-    """Returns (prompt, model) tuple. Model selected based on current stage."""
+    """Returns (prompt, model) tuple. Always starts fresh — no resume logic."""
     job_id = job["id"]
     client = job.get("client", "unknown")
     stage = job.get("currentStage", "")
     model = _model_for_stage(stage)
 
-    if resume:
-        prompt = (
-            f"RESUME: Job #{job_id} on LeftClaw is already assigned to you and IN PROGRESS "
-            f"(current stage: '{stage}'). Previous run may have crashed or timed out. "
-            f"Do NOT call leftclaw_accept_job — the job is already accepted. "
-            f"First fetch your skill docs with deep_fetch: "
-            f"https://ethskills.com/SKILL.md, "
-            f"https://docs.scaffoldeth.io/SKILL.md, "
-            f"https://www.bgipfs.com/SKILL.md, "
-            f"https://leftclaw.services/admin/skill.md. "
-            f"Then use leftclaw_get_job to read the full description, leftclaw_get_messages to check for "
-            f"client messages and rollback requests. "
-            f"Determine which stage comes AFTER '{stage}' in the pipeline, and continue from there. "
-            f"Work through remaining stages, log work after each, and complete the job when ready."
-        )
-        return prompt, model
+    skill_list = "\n".join(f"  - {u}" for u in SKILL_URLS)
 
-    if attempt == 1:
-        prompt = (
-            f"You have a Build job to complete. "
-            f"Job #{job_id} on LeftClaw Services. Client: {client}. "
-            f"First fetch your skill docs with deep_fetch: "
-            f"https://ethskills.com/SKILL.md, "
-            f"https://docs.scaffoldeth.io/SKILL.md, "
-            f"https://www.bgipfs.com/SKILL.md, "
-            f"https://leftclaw.services/admin/skill.md. "
-            f"Then use leftclaw_get_job to read the full description, leftclaw_get_messages to check for client messages. "
-            f"Note the job.client address — this is who owns everything you build. "
-            f"Work through the full Build pipeline: create_repo → create_plan → create_user_journey → "
-            f"prototype → contract_audit → contract_fix → frontend_audit → frontend_fix → "
-            f"full_audit → full_audit_fix → deploy_contract → deploy_app → liveuserjourney → readme → ready. "
-            f"Log work after each stage. Follow ethskills.com exactly. "
-            f"Deploy contracts to Base, deploy frontend to BGIPFS. "
-            f"Complete the job with leftclaw_complete_job using the BGIPFS gateway URL."
-        )
-        return prompt, model
+    already_accepted = resume or attempt > 1
 
     prompt = (
-        f"RETRY: Job #{job_id} on LeftClaw was accepted but not completed on a previous attempt "
-        f"(current stage: '{stage}'). "
-        f"The job is already accepted — do NOT call leftclaw_accept_job again. "
-        f"Fetch your skill docs: https://ethskills.com/SKILL.md, "
-        f"https://docs.scaffoldeth.io/SKILL.md, https://www.bgipfs.com/SKILL.md, "
-        f"https://leftclaw.services/admin/skill.md. "
-        f"Use leftclaw_get_job to read the description, check messages for rollbacks. "
-        f"Continue the pipeline from the stage after '{stage}'. "
-        f"Log work after each stage, complete the job when all stages are done."
+        f"You have a Build job to complete. "
+        f"Job #{job_id} on LeftClaw Services. Client: {client}. "
+        f"\n\n{'This job is already accepted — do NOT call leftclaw_accept_job.' if already_accepted else ''}"
+        f"\n\nUse leftclaw_get_job to read the full description, leftclaw_get_messages to check for client messages. "
+        f"Note the job.client address — this is who owns everything you build. "
+        f"\n\nSTART FRESH. Every run gets its own folder. Your first delegation must find the next "
+        f"available folder name under ./builds/ — check for leftclaw-service-job-{job_id}, then "
+        f"leftclaw-service-job-{job_id}_2, leftclaw-service-job-{job_id}_3, etc. Use the first name "
+        f"that doesn't already exist. Do NOT reuse or resume from any existing folder. "
+        f"\n\nFollow the PLANNING-FIRST pipeline: "
+        f"\n1. create_repo — Set up the GitHub repo and clone into the fresh folder. "
+        f"\n2. master_plan — Scaffold SE2, then delegate writing MASTER_PLAN.md. "
+        f"   The planning sub-agent must fetch and read ALL skill docs to understand available patterns: "
+        f"\n{skill_list}"
+        f"\n   MASTER_PLAN.md must cover: architecture, every contract (with function signatures), "
+        f"every frontend page, components, hooks, deploy strategy, security model, and dependencies. "
+        f"\n3. break_into_steps — Delegate breaking MASTER_PLAN.md into granular step files in steps/. "
+        f"   One step per contract, per page, per audit, per fix, per deployment. Each step file is self-contained. "
+        f"\n4. Execute each step in order by delegating them one at a time. "
+        f"\n5. Deploy contracts to Base, deploy frontend to BGIPFS. "
+        f"\n6. Complete the job with leftclaw_complete_job using the BGIPFS gateway URL. "
+        f"\n\nLog work after each stage. The plan files are the source of truth for the whole build."
     )
     return prompt, model
 
